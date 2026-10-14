@@ -1,0 +1,152 @@
+# Cortex Control for Linux
+
+Run Neural DSP's **Cortex Control** editor on Linux under Wine, connected
+over USB to your Quad Cortex, with no Windows VM.
+
+> [!WARNING]
+> **Tested only on Ubuntu 26.04 with Wine 10.0 and a Quad Cortex mini.**
+> Other distros, Wine versions and the full-size Quad Cortex may work, but
+> nobody has checked yet. Reports are welcome.
+
+> [!CAUTION]
+> **Do not update firmware through Cortex Control under Wine.** If an update
+> fails partway, the unit can be left unusable. Update firmware over **Wi-Fi
+> on the device itself** instead.
+
+This is an unofficial community project. It is not affiliated with or
+endorsed by Neural DSP. It does not include Cortex Control: you download the
+official Windows installer from Neural DSP yourself.
+
+## What works
+
+| | Status |
+|---|---|
+| App starts and renders | ✅ |
+| Detects and connects to the Quad Cortex mini over USB | ✅ |
+| Loading and editing presets | ✅ |
+| Window resizing | ⚠️ works but jumpy |
+| Firmware updates | ⛔ don't, see above |
+| Full-size Quad Cortex | ❓ untested |
+
+## Install
+
+1. Install the dependencies (Ubuntu/Debian):
+
+   ```sh
+   sudo apt install wine winetricks mingw-w64
+   ```
+
+   `mingw-w64` is optional. With it, the shim DLL is built from source on
+   your machine. Without it, the installer downloads the prebuilt DLL from
+   this repo's latest [release](../../releases) and verifies its SHA-256.
+
+2. Download the **Windows** installer for Cortex Control from
+   [neuraldsp.com](https://neuraldsp.com) (you need to be signed in).
+
+3. Plug in the Quad Cortex and run:
+
+   ```sh
+   git clone https://github.com/0xteo/cortex-control-linux
+   cd cortex-control-linux
+   ./install.sh ~/Downloads/"Cortex Control v4.1.0.exe"
+   ```
+
+   Cortex Control is installed silently, because its setup wizard renders
+   garbled under Wine (`CORTEX_INTERACTIVE=1` shows it anyway). The script
+   may ask for `sudo` once to install a udev rule (see below).
+
+4. Start **Cortex Control** from your app menu, or run `cortex-control`.
+
+Everything goes into its own Wine prefix (`~/.wine-cortex`, override with
+`CORTEX_PREFIX=...`), so your other Wine apps are not affected.
+
+## How it works
+
+Out of the box, Cortex Control under Wine 10 has two problems:
+
+1. **The window is black.** The UI is JUCE drawing through Direct2D/Direct3D
+   11, which Wine's built-in D3D doesn't handle well. The installer adds
+   [DXVK](https://github.com/doitsujin/dxvk) (D3D11 on Vulkan) to the prefix,
+   which fixes it.
+
+2. **The Quad Cortex is never detected.** The app finds devices with
+   [hidapi](https://github.com/libusb/hidapi), which calls
+   `CM_Get_Device_Interface_List_SizeW` from `cfgmgr32.dll` first. In Wine 10
+   that function is a stub that always fails (as is
+   `SetupDiOpenDeviceInterfaceW`, which is needed to get the device's
+   instance ID), so hidapi sees zero devices.
+   [`shim/cfgmgr32.c`](shim/cfgmgr32.c) is a small replacement
+   `cfgmgr32.dll` that implements those calls on top of the `SetupDi*` APIs
+   that Wine *does* implement, and forwards everything else to `setupapi`
+   like Wine's own DLL does. It sits next to `Cortex Control.exe` and is
+   enabled by a per-app DLL override, so nothing else in the prefix uses it.
+
+Wine passes the Quad Cortex's vendor HID interface through via `/dev/hidraw*`,
+which needs read/write access for your user. Many distros don't grant that,
+so the installer adds
+[`udev/70-neural-dsp-quad-cortex.rules`](udev/70-neural-dsp-quad-cortex.rules),
+which gives the logged-in user access to Neural DSP devices only.
+
+## Troubleshooting
+
+**Window opens partly off-screen.** Double-click the title bar to maximize it
+(or resize it), then close the app. It remembers the size.
+
+**Device not detected.** Give it a few seconds first: Wine brings USB
+devices up shortly after it starts, and Cortex Control rescans every second.
+If it still doesn't connect, check that your user can access the HID node:
+
+```sh
+for h in /sys/class/hidraw/*; do grep -q "Neural DSP" $h/device/uevent && ls -l /dev/$(basename $h); done
+```
+
+Then run the shim's self-test, which looks for the Quad Cortex the same way
+Cortex Control does (needs `mingw-w64`):
+
+```sh
+make -C shim test-enum.exe
+cp shim/test-enum.exe ~/.wine-cortex/drive_c/Program\ Files/Neural\ DSP/Cortex\ Control/
+cd ~/.wine-cortex/drive_c/Program\ Files/Neural\ DSP/Cortex\ Control
+WINEPREFIX=~/.wine-cortex WINEDLLOVERRIDES=cfgmgr32=n wine test-enum.exe
+```
+
+Or launch the app with the shim's logging on:
+
+```sh
+cd ~/.wine-cortex/drive_c/Program\ Files/Neural\ DSP/Cortex\ Control
+WINEPREFIX=~/.wine-cortex CFGSHIM_LOG=1 wine "Cortex Control.exe" 2>&1 | grep cfgshim
+```
+
+You should see a `\\?\hid#vid_152a&pid_...` line for the Quad Cortex. The
+repeated `hidraw_device_set_output_report ... Broken pipe` errors in Wine's
+log are harmless: the device rejects one optional message and everything
+else works.
+
+**Don't switch Wine to its Wayland driver.** Under Wayland the window loses
+your desktop's title bar, gets a Windows 95-style frame and may get stuck
+fullscreen. The default X11 driver (XWayland) gives a normal window.
+
+## Audio
+
+The Quad Cortex mini is a standard USB audio interface (8 in / 8 out,
+48 kHz), so audio doesn't need any of this: PipeWire picks it up directly.
+Tips:
+
+- Switch it to the **Pro Audio** profile (e.g. in `pavucontrol`) so the
+  channels appear as plain `AUX0–7` instead of a fake 7.1 surround layout.
+- For a DAW, install `pipewire-jack`. On Ubuntu you also need
+  `sudo cp /usr/share/doc/pipewire/examples/ld.so.conf.d/pipewire-jack-*.conf /etc/ld.so.conf.d/ && sudo ldconfig`.
+- Headphones with a built-in mic (TRRS plugs) sound hollow and phasey in the
+  headphone jack. Use plain stereo headphones or a TRRS-to-TRS adapter.
+
+## Uninstall
+
+```sh
+./uninstall.sh
+```
+
+## License
+
+The scripts and shim are MIT licensed (see [LICENSE](LICENSE)). Cortex
+Control, Quad Cortex and Neural DSP are trademarks of Neural DSP
+Technologies Oy, which is not involved with this project.

@@ -1,0 +1,5 @@
+# Let the logged-in user open the Quad Cortex's HID control interface, which
+# Cortex Control uses to talk to the device (Wine reads it via /dev/hidraw*).
+# 152a is Thesycon's USB vendor ID, shared with other audio brands, so also
+# match on the Neural DSP manufacturer string.
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="152a", ATTRS{manufacturer}=="Neural DSP", TAG+="uaccess"

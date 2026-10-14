@@ -1,0 +1,16 @@
+LIBRARY cfgmgr32.dll
+EXPORTS
+    CM_Get_Device_Interface_List_SizeW
+    CM_Get_Device_Interface_List_Size_ExW
+    CM_Get_Device_Interface_ListW
+    CM_Get_Device_Interface_List_ExW
+    CM_Get_Device_Interface_PropertyW
+    CM_Get_DevNode_PropertyW = setupapi.CM_Get_DevNode_PropertyW
+    CM_Get_Parent = setupapi.CM_Get_Parent
+    CM_Locate_DevNodeW = setupapi.CM_Locate_DevNodeW
+    CM_Get_Device_IDW = setupapi.CM_Get_Device_IDW
+    CM_Get_Device_ID_Size = setupapi.CM_Get_Device_ID_Size
+    CM_Get_Child = setupapi.CM_Get_Child
+    CM_Get_Sibling = setupapi.CM_Get_Sibling
+    CM_Get_DevNode_Status = setupapi.CM_Get_DevNode_Status
+    CM_Get_DevNode_Registry_PropertyW = setupapi.CM_Get_DevNode_Registry_PropertyW
