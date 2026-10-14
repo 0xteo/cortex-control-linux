@@ -13,9 +13,30 @@ over USB to your Quad Cortex, with no Windows VM.
 > fails partway, the unit can be left unusable. Update firmware over **Wi-Fi
 > on the device itself** instead.
 
-This is an unofficial community project. It is not affiliated with or
-endorsed by Neural DSP. It does not include Cortex Control: you download the
-official Windows installer from Neural DSP yourself.
+## ⚠️ Disclaimer: use at your own risk
+
+**By installing or using this project you accept full responsibility for
+the outcome.** It is provided "as is", without warranty of any kind (see
+[LICENSE](LICENSE)). The authors and contributors take **no responsibility**
+for damaged or unusable ("bricked") devices, failed or interrupted firmware
+updates, lost presets or other data, voided warranties, or any other damage
+or loss resulting from its use.
+
+- This is an unofficial community project. It is **not affiliated with,
+  endorsed by or supported by Neural DSP**. Neural DSP does not support
+  running Cortex Control on Linux and may decline to help with problems
+  caused by it.
+- Neural DSP's hardware warranty excludes damage from not following the
+  Owner's Manual. Using unsupported software, and especially updating
+  firmware with it, may put your warranty at risk.
+- **Back up your presets** before using it.
+- This project does not include or redistribute Cortex Control. The
+  installer downloads the official Windows installer from Neural DSP's own
+  servers, and you accept Neural DSP's license agreement in its setup
+  wizard as usual.
+
+The installer asks you to type `I AGREE` to these terms before it does
+anything.
 
 ## What works
 
@@ -61,8 +82,8 @@ The script:
 2. Downloads the official Cortex Control v4.1.0 Windows installer from
    Neural DSP's [download page](https://neuraldsp.com/downloads) and checks
    its SHA-256. This project doesn't host it.
-3. Installs it silently into its own Wine prefix. The setup wizard renders
-   garbled under Wine; `CORTEX_INTERACTIVE=1` shows it anyway.
+3. Opens the official setup wizard in its own Wine prefix. Read and accept
+   Neural DSP's license there, then click through with the defaults.
 4. Adds DXVK, the cfgmgr32 shim, and a udev rule if your system needs one
    (this step asks for `sudo`).
 5. Adds a **Cortex Control** entry to your app menu and a `cortex-control`
@@ -94,6 +115,14 @@ Out of the box, Cortex Control under Wine 10 has two problems:
    that Wine *does* implement, and forwards everything else to `setupapi`
    like Wine's own DLL does. It sits next to `Cortex Control.exe` and is
    enabled by a per-app DLL override, so nothing else in the prefix uses it.
+
+The official setup wizard is also patched up for Wine, without modifying
+Neural DSP's installer: Wine draws its "transparent" text labels on the
+system button colour instead of the background image, which hides the
+wizard's white text. The installer temporarily switches Wine to dark system
+colours while the wizard runs, and applies a small Windows Installer
+transform ([`transform/cancel-dark.mst`](transform/make-mst.c), passed as
+`TRANSFORMS=`) so the Cancel confirmation matches the dark wizard too.
 
 Wine passes the Quad Cortex's vendor HID interface through via `/dev/hidraw*`,
 which needs read/write access for your user. Many distros don't grant that,
@@ -161,6 +190,6 @@ Tips:
 
 ## License
 
-The scripts and shim are MIT licensed (see [LICENSE](LICENSE)). Cortex
+The scripts and shim are MIT licensed and come with no warranty (see [LICENSE](LICENSE)). Cortex
 Control, Quad Cortex and Neural DSP are trademarks of Neural DSP
 Technologies Oy, which is not involved with this project.

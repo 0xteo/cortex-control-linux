@@ -27,6 +27,14 @@ confirm() {
 }
 
 wine_() { WINEPREFIX="$PREFIX" WINEDEBUG=-all wine "$@"; }
+# Wine only reads system colours and theme at startup, so restart it after
+# changing them. Ubuntu keeps wineserver out of PATH.
+WINESERVER="$(command -v wineserver || ls /usr/lib/*/wine/wineserver /usr/lib/wine/wineserver 2>/dev/null | head -n1 || true)"
+restart_wine() {
+  [ -n "$WINESERVER" ] || return 0
+  WINEPREFIX="$PREFIX" "$WINESERVER" -k 2>/dev/null || true
+  WINEPREFIX="$PREFIX" "$WINESERVER" -w 2>/dev/null || true
+}
 
 INSTALLER=""
 if [ $# -ge 1 ]; then
@@ -38,12 +46,22 @@ cat <<'EOF'
 
   Cortex Control for Linux (unofficial, not affiliated with Neural DSP)
 
+  USE AT YOUR OWN RISK. This software is provided "as is", without warranty
+  of any kind. The authors take NO responsibility for damaged or unusable
+  ("bricked") devices, lost presets or data, voided warranties, or any other
+  harm resulting from its use. Neural DSP does not support running Cortex
+  Control on Linux and may not help you with problems caused by it.
+
   !! Tested ONLY on Ubuntu 26.04 + Wine 10.0 with a Quad Cortex mini.
   !! DO NOT UPDATE FIRMWARE through Cortex Control under Wine. A failed
   !! update can leave your unit unusable. Update over Wi-Fi on the device.
+  !! Back up your presets before using it.
 
 EOF
-confirm "Continue?" || exit 1
+if [ "${CORTEX_ACCEPT_RISK:-}" != 1 ]; then
+  read -r -p 'Type "I AGREE" to accept these risks and continue: ' ans
+  [ "$ans" = "I AGREE" ] || die "not accepted; nothing was installed"
+fi
 
 step "Checking requirements"
 missing=()
@@ -122,15 +140,37 @@ fi
 step "Creating Wine prefix at $PREFIX"
 wine_ wineboot -i >/dev/null 2>&1
 wine_ winecfg -v win10 >/dev/null 2>&1
+# Use the classic (unthemed) look: with Wine's default "light" theme the setup
+# wizard ignores the colours set below and its text is unreadable.
+wine_ reg add 'HKCU\Software\Microsoft\Windows\CurrentVersion\ThemeManager' \
+  /v ThemeActive /d 0 /f >/dev/null
 
-# The Advanced Installer wizard renders garbled under Wine (black background,
-# unreadable text), so install silently. CORTEX_INTERACTIVE=1 shows it anyway.
-if [ "${CORTEX_INTERACTIVE:-}" = 1 ]; then
-  step "Running the Cortex Control installer (click through it with the defaults)"
-  wine_ "$INSTALLER" >/dev/null 2>&1 || true
-else
-  step "Installing Cortex Control silently (takes a minute)"
+# The setup wizard shows Neural DSP's license agreement. CORTEX_ACCEPT_EULA=1
+# installs silently for automated setups, i.e. accepts it without seeing it.
+if [ "${CORTEX_ACCEPT_EULA:-}" = 1 ]; then
+  step "Installing Cortex Control silently (CORTEX_ACCEPT_EULA=1)"
   wine_ "$INSTALLER" /exenoui /qn >/dev/null 2>&1 || true
+else
+  step "Running the Cortex Control setup wizard"
+  echo "Read and accept Neural DSP's license, then click through with the defaults."
+  # The wizard is dark-themed with transparent labels, but Wine fills label
+  # backgrounds with the system button colour (light grey), hiding the white
+  # text. Use dark button colours while it runs, then restore the defaults.
+  wizard_colors=("ButtonFace=0 0 0" "ButtonText=235 235 235" "ButtonHilight=90 90 90"
+                 "ButtonLight=60 60 60" "ButtonShadow=40 40 40" "ButtonDkShadow=20 20 20"
+                 "GrayText=130 130 130")
+  for kv in "${wizard_colors[@]}"; do
+    wine_ reg add 'HKCU\Control Panel\Colors' /v "${kv%%=*}" /d "${kv#*=}" /f >/dev/null
+  done
+  restart_wine
+  # With dark button colours the Cancel confirmation (black text on a white
+  # image) would be unreadable; this transform makes it match the wizard.
+  # See transform/make-mst.c.
+  mst="$(WINEPREFIX="$PREFIX" WINEDEBUG=-all winepath -w "$HERE/transform/cancel-dark.mst")"
+  wine_ "$INSTALLER" TRANSFORMS="$mst" >/dev/null 2>&1 || true
+  for kv in "${wizard_colors[@]}"; do
+    wine_ reg delete 'HKCU\Control Panel\Colors' /v "${kv%%=*}" /f >/dev/null 2>&1 || true
+  done
 fi
 exe=""
 for _ in $(seq 1 60); do
