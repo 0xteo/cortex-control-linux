@@ -28,34 +28,48 @@ official Windows installer from Neural DSP yourself.
 | Firmware updates | ⛔ don't, see above |
 | Full-size Quad Cortex | ❓ untested |
 
+## Requirements
+
+- **Ubuntu 26.04** (the only tested distro; others may work)
+- **Wine 10** and **winetricks**: the installer offers to `apt install`
+  them if they're missing
+- A GPU with a **Vulkan** driver (standard Mesa drivers on Intel/AMD are
+  fine; Ubuntu ships them by default)
+- A **Quad Cortex mini**, connected over USB
+- Optional: `mingw-w64` to build the shim DLL from source. Without it, the
+  installer downloads the prebuilt DLL from this repo's latest
+  [release](../../releases) and checks its SHA-256.
+
 ## Install
 
-1. Install the dependencies (Ubuntu/Debian):
+Plug in the Quad Cortex, then:
 
-   ```sh
-   sudo apt install wine winetricks mingw-w64
-   ```
+```sh
+git clone https://github.com/0xteo/cortex-control-linux
+cd cortex-control-linux
+./install.sh
+```
 
-   `mingw-w64` is optional. With it, the shim DLL is built from source on
-   your machine. Without it, the installer downloads the prebuilt DLL from
-   this repo's latest [release](../../releases) and verifies its SHA-256.
+No git? Download `cortex-control-linux-<version>.tar.gz` from the
+[latest release](../../releases/latest) (it includes the prebuilt shim),
+extract it, and run `./install.sh` inside.
 
-2. Download the **Windows** installer for Cortex Control from
-   [neuraldsp.com](https://neuraldsp.com) (you need to be signed in).
+The script:
 
-3. Plug in the Quad Cortex and run:
+1. Installs missing prerequisites (`wine`, `winetricks`, `curl`) with
+   `apt` after asking.
+2. Downloads the official Cortex Control v4.1.0 Windows installer from
+   Neural DSP's [download page](https://neuraldsp.com/downloads) and checks
+   its SHA-256. This project doesn't host it.
+3. Installs it silently into its own Wine prefix. The setup wizard renders
+   garbled under Wine; `CORTEX_INTERACTIVE=1` shows it anyway.
+4. Adds DXVK, the cfgmgr32 shim, and a udev rule if your system needs one
+   (this step asks for `sudo`).
+5. Adds a **Cortex Control** entry to your app menu and a `cortex-control`
+   command.
 
-   ```sh
-   git clone https://github.com/0xteo/cortex-control-linux
-   cd cortex-control-linux
-   ./install.sh ~/Downloads/"Cortex Control v4.1.0.exe"
-   ```
-
-   Cortex Control is installed silently, because its setup wizard renders
-   garbled under Wine (`CORTEX_INTERACTIVE=1` shows it anyway). The script
-   may ask for `sudo` once to install a udev rule (see below).
-
-4. Start **Cortex Control** from your app menu, or run `cortex-control`.
+To use an installer you already downloaded, or a newer version (untested),
+pass its path: `./install.sh ~/Downloads/"Cortex Control vX.Y.Z.exe"`.
 
 Everything goes into its own Wine prefix (`~/.wine-cortex`, override with
 `CORTEX_PREFIX=...`), so your other Wine apps are not affected.

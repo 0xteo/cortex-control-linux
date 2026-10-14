@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install Neural DSP Cortex Control on Linux under Wine.
-# Usage: ./install.sh "/path/to/Cortex Control vX.Y.Z.exe"
+# Usage: ./install.sh ["/path/to/Cortex Control vX.Y.Z.exe"]
+# Without an argument, the tested installer is downloaded from Neural DSP.
 set -euo pipefail
 
 REPO="0xteo/cortex-control-linux"
@@ -9,17 +10,29 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}"
 BIN_DIR="$HOME/.local/bin"
 TESTED_WINE_MAJOR=10
+# The Cortex Control version this was tested with, from Neural DSP's public
+# download page (https://neuraldsp.com/downloads).
+CC_VERSION="4.1.0"
+CC_URL="https://downloads.neuraldsp.com/file/cortex-control-installers/v_$CC_VERSION/windows/Cortex%20Control%20v$CC_VERSION.exe"
+CC_SHA256="c03942a0631afd195d3d70febf91384bf39cb7101014146f26f5ba65fd73228c"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/cortex-control-linux"
 
-bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31mError: %s\033[0m\n' "$*" >&2; exit 1; }
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
+confirm() {
+  [ "${CORTEX_YES:-}" = 1 ] && return 0
+  read -r -p "$1 [y/N] " ans
+  [[ "$ans" =~ ^[Yy]$ ]]
+}
 
 wine_() { WINEPREFIX="$PREFIX" WINEDEBUG=-all wine "$@"; }
 
-[ $# -ge 1 ] || die "pass the Windows Cortex Control installer, e.g. ./install.sh ~/Downloads/'Cortex Control v4.1.0.exe'"
-INSTALLER="$(realpath "$1")"
-[ -f "$INSTALLER" ] || die "installer not found: $1"
+INSTALLER=""
+if [ $# -ge 1 ]; then
+  [ -f "$1" ] || die "installer not found: $1"
+  INSTALLER="$(realpath "$1")"
+fi
 
 cat <<'EOF'
 
@@ -30,18 +43,49 @@ cat <<'EOF'
   !! update can leave your unit unusable. Update over Wi-Fi on the device.
 
 EOF
-if [ "${CORTEX_YES:-}" != 1 ]; then
-  read -r -p "Continue? [y/N] " ans
-  [[ "$ans" =~ ^[Yy]$ ]] || exit 1
-fi
+confirm "Continue?" || exit 1
 
 step "Checking requirements"
-command -v wine >/dev/null || die "wine is not installed (Ubuntu: sudo apt install wine)"
-command -v winetricks >/dev/null || die "winetricks is not installed (Ubuntu: sudo apt install winetricks)"
+missing=()
+for cmd in wine winetricks curl; do
+  command -v "$cmd" >/dev/null || missing+=("$cmd")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  if command -v apt-get >/dev/null; then
+    echo "Missing: ${missing[*]}"
+    confirm "Install them with 'sudo apt install ${missing[*]}'?" || die "install ${missing[*]} and run this again"
+    sudo apt-get install -y "${missing[@]}"
+  else
+    die "missing: ${missing[*]}. Install them with your package manager and run this again"
+  fi
+fi
 wine_version="$(wine --version)"
 wine_major="$(sed -E 's/^wine-([0-9]+).*/\1/' <<<"$wine_version")"
 echo "Found $wine_version"
 [ "$wine_major" = "$TESTED_WINE_MAJOR" ] || warn "only tested with Wine $TESTED_WINE_MAJOR.x; continuing anyway"
+# DXVK needs a Vulkan driver; most distros ship one with Mesa by default.
+if ! compgen -G '/usr/share/vulkan/icd.d/*.json' >/dev/null && ! compgen -G '/etc/vulkan/icd.d/*.json' >/dev/null; then
+  warn "no Vulkan driver found; the app window may stay black (Ubuntu: sudo apt install mesa-vulkan-drivers)"
+fi
+
+step "Getting the Cortex Control installer"
+if [ -n "$INSTALLER" ]; then
+  echo "Using $INSTALLER"
+  [ "$(sha256sum "$INSTALLER" | cut -d' ' -f1)" = "$CC_SHA256" ] \
+    || warn "this isn't the tested v$CC_VERSION installer; it may or may not work"
+else
+  INSTALLER="$CACHE_DIR/Cortex Control v$CC_VERSION.exe"
+  if [ ! -f "$INSTALLER" ]; then
+    echo "Downloading Cortex Control v$CC_VERSION from neuraldsp.com"
+    mkdir -p "$CACHE_DIR"
+    curl -fL --progress-bar -o "$INSTALLER.part" "$CC_URL" \
+      || die "download failed; get the Windows installer from https://neuraldsp.com/downloads and pass its path"
+    mv "$INSTALLER.part" "$INSTALLER"
+  fi
+  [ "$(sha256sum "$INSTALLER" | cut -d' ' -f1)" = "$CC_SHA256" ] \
+    || { rm -f "$INSTALLER"; die "checksum mismatch on the downloaded installer"; }
+  echo "Verified $INSTALLER"
+fi
 
 step "Getting the cfgmgr32 shim"
 SHIM="$HERE/shim/cfgmgr32.dll"

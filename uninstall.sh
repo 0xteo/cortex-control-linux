@@ -12,7 +12,7 @@ read -r -p "Continue? [y/N] " ans
 [[ "$ans" =~ ^[Yy]$ ]] || exit 1
 
 pkill -f 'Cortex Control.exe' 2>/dev/null || true
-rm -rf "$PREFIX"
+rm -rf "$PREFIX" "${XDG_CACHE_HOME:-$HOME/.cache}/cortex-control-linux"
 rm -f "$HOME/.local/bin/cortex-control" "$DATA_DIR/applications/cortex-control.desktop"
 rm -rf "$DATA_DIR/applications/wine/Programs/Cortex Control" "$DATA_DIR/desktop-directories/wine-Programs-Cortex Control.directory"
 rm -f "$DATA_DIR"/icons/hicolor/*/apps/cortex-control.png "$DATA_DIR"/icons/hicolor/*/apps/*_Cortex\ Control.0.png

@@ -38,5 +38,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" shim/cfgmgr32.dll shim/cfgmgr32.dll.sha256 \
+          name="cortex-control-linux-$GITHUB_REF_NAME"
+          git archive --prefix="$name/" -o "$name.tar" HEAD
+          tar --transform "s|^|$name/|" -rf "$name.tar" shim/cfgmgr32.dll
+          gzip "$name.tar"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          gh release create "$GITHUB_REF_NAME" "$name.tar.gz" "$name.tar.gz.sha256" \
+            shim/cfgmgr32.dll shim/cfgmgr32.dll.sha256 \
             --title "$GITHUB_REF_NAME" --generate-notes
