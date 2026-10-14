@@ -29,7 +29,10 @@ confirm() {
 wine_() { WINEPREFIX="$PREFIX" WINEDEBUG=-all wine "$@"; }
 # Wine only reads system colours and theme at startup, so restart it after
 # changing them. Ubuntu keeps wineserver out of PATH.
-WINESERVER="$(command -v wineserver || ls /usr/lib/*/wine/wineserver /usr/lib/wine/wineserver 2>/dev/null | head -n1 || true)"
+WINESERVER="$(command -v wineserver || true)"
+for ws in /usr/lib/x86_64-linux-gnu/wine/wineserver /usr/lib/*/wine/wineserver /usr/lib/wine/wineserver; do
+  if [ -z "$WINESERVER" ] && [ -x "$ws" ]; then WINESERVER="$ws"; fi
+done
 restart_wine() {
   [ -n "$WINESERVER" ] || return 0
   WINEPREFIX="$PREFIX" "$WINESERVER" -k 2>/dev/null || true
